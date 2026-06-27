@@ -1,104 +1,102 @@
-import uvicorn
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+import re
+from urllib.parse import urlparse
+import joblib
 import pandas as pd
-import tldextract
-from xgboost import XGBClassifier
+from fastapi import FastAPI, Request, Form
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
-app = FastAPI(title="AI Phishing Detection API")
+app = FastAPI(title="AI Phishing Link Guardian")
 
-# Enable CORS so your frontend can communicate with the backend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your actual frontend URL
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Mount static files and templates
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
-# Global model variable
-model = XGBClassifier()
+# Load AI Model safely
+try:
+    model = joblib.load("phishing_model.pkl")
+    feature_columns = joblib.load("feature_columns.pkl")
+except FileNotFoundError:
+    print("ERROR: Run train.py first to generate the model files!")
 
-# ==========================================
-# FEATURE EXTRACTION
-# ==========================================
-def extract_features(url: str):
-    url = str(url).strip().lower()
-    ext = tldextract.extract(url)
-    
-    subdomains = ext.subdomain.split('.') if ext.subdomain else []
-    count_subdomains = len([s for s in subdomains if s])
-
-    return {
-        'url_length': len(url),
-        'hostname_length': len(ext.fqdn),
-        'count_dots': url.count('.'),
-        'count_hyphens': url.count('-'),
-        'count_at': url.count('@'),
-        'count_question': url.count('?'),
-        'count_equal': url.count('='),
-        'count_slash': url.count('/'),
-        'has_http': 1 if 'http://' in url else 0,
-        'has_https': 1 if 'https://' in url else 0,
-        'is_ip': 1 if ext.domain.replace('.', '').isdigit() else 0,
-        'count_subdomains': count_subdomains
-    }
-
-# ==========================================
-# MODEL INITIALIZATION ON STARTUP
-# ==========================================
-@app.on_event("startup")
-def train_model():
-    global model
-    print("[-] Training AI Model...")
-    
-    # Mock data setup (Replace with a larger dataset CSV file for production)
-    mock_data = [
-        {"url": "https://www.google.com", "label": 0},
-        {"url": "https://www.github.com", "label": 0},
-        {"url": "https://www.amazon.com", "label": 0},
-        {"url": "http://secure-login-paypal-verify.com", "label": 1},
-        {"url": "http://192.168.1.105/login.php", "label": 1},
-        {"url": "https://amaz0n-security-check.net", "label": 1}
-    ] * 10
-    
-    df = pd.DataFrame(mock_data)
-    feature_list = df['url'].apply(extract_features).tolist()
-    X = pd.DataFrame(feature_list)
-    y = df['label']
-    
-    model = XGBClassifier(n_estimators=100, max_depth=5, learning_rate=0.1, random_state=42)
-    model.fit(X, y)
-    print("[+] Model trained successfully and ready!")
-
-# ==========================================
-# API ENDPOINTS
-# ==========================================
-class URLRequest(BaseModel):
-    url: str
-
-@app.post("/predict")
-def predict_phishing(payload: URLRequest):
-    if not payload.url:
-        raise HTTPException(status_code=400, detail="URL cannot be empty")
+def extract_features(url: str) -> dict:
+    """Extract features from raw URL mapping directly to your dataset's columns"""
+    if not url.startswith(('http://', 'https://')):
+        url = 'http://' + url
         
-    try:
-        # Extract features and convert to DataFrame matching model expectations
-        features = extract_features(payload.url)
-        features_df = pd.DataFrame([features])
-        
-        # Predict
-        prediction = int(model.predict(features_df)[0])
-        probability = float(model.predict_proba(features_df)[0][1])
-        
-        return {
-            "url": payload.url,
-            "is_phishing": prediction == 1,
-            "confidence_score": round(probability * 100, 2)
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    parsed_url = urlparse(url)
+    domain = parsed_url.netloc
+    
+    features = {}
+    
+    # 1. Have_IP
+    ip_pattern = r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}'
+    features['Have_IP'] = 1 if re.match(ip_pattern, domain) else 0
+    
+    # 2. Have_At
+    features['Have_At'] = 1 if '@' in url else 0
+    
+    # 3. URL_Length
+    features['URL_Length'] = len(url)
+    
+    # 4. URL_Depth
+    features['URL_Depth'] = len([x for x in parsed_url.path.split('/') if x])
+    
+    # 5. Redirection
+    features['Redirection'] = 1 if url.rfind('//') > 7 else 0
+    
+    # 6. https_Domain
+    features['https_Domain'] = 1 if 'https' in domain else 0
+    
+    # 7. TinyURL
+    shortening_services = r"bit\.ly|goo\.gl|shorte\.st|go2l\.ink|x\.co|ow\.ly|t\.co|tinyurl|tr\.im|is\.gd|cli\.gs"
+    features['TinyURL'] = 1 if re.search(shortening_services, url) else 0
+    
+    # 8. Prefix/Suffix (Hyphen in domain)
+    features['Prefix/Suffix'] = 1 if '-' in domain else 0
+    
+    # Fill remaining columns with safe/average defaults for features hard to parse statically
+    # (DNS_Record, Web_Traffic, Domain_Age, Domain_End, iFrame, Mouse_Over, Right_Click, Web_Forwards)
+    features['DNS_Record'] = 0
+    features['Web_Traffic'] = 0
+    features['Domain_Age'] = 1
+    features['Domain_End'] = 1
+    features['iFrame'] = 0
+    features['Mouse_Over'] = 0
+    features['Right_Click'] = 0
+    features['Web_Forwards'] = 0
+    
+    return features
+
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    return templates.TemplateResponse(request, "index.html", {"result": None})
+
+@app.post("/analyze", response_class=HTMLResponse)
+async def analyze_url(request: Request, url: str = Form(...)):
+    # 1. Extract features from user input
+    extracted = extract_features(url)
+    
+    # 2. Construct DataFrame matching the exact training columns order
+    input_df = pd.DataFrame([extracted])[feature_columns]
+    
+    # 3. Predict with AI Model
+    prediction = int(model.predict(input_df)[0])
+    probabilities = model.predict_proba(input_df)[0]
+    confidence = round(probabilities[prediction] * 100, 2)
+    
+    # Label mapping (adjust based on your dataset encoding, assuming 1=Phishing, 0=Safe)
+    status = "MALICIOUS / PHISHING" if prediction == 1 else "SAFE / LEGITIMATE"
+    result_class = "danger" if prediction == 1 else "success"
+    
+    return templates.TemplateResponse(request, "index.html", {
+        "url": url,
+        "status": status,
+        "confidence": f"{confidence}%",
+        "result_class": result_class
+    })
 
 if __name__ == "__main__":
+    import uvicorn
     uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True)

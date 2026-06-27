@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Phishing Link Detector</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AI Link Guard</h1>
+            <p>Real-time machine learning phishing verification system</p>
+        </header>
+
+        <main>
+            <section class="form-section">
+                <form action="/analyze" method="POST">
+                    <input type="text" name="url" placeholder="Paste suspicious URL here (e.g., http://secure-login-bank.com)" required value="{{ url if url else '' }}">
+                    <button type="submit">Analyze Link</button>
+                </form>
+            </section>
+
+            {% if status %}
+            <section class="result-card {{ result_class }}">
+                <h2>Scan Result</h2>
+                <div class="url-display">Analyzed: <span>{{ url }}</span></div>
+                <div class="status-badge">{{ status }}</div>
+                <p>AI Model Confidence: <strong>{{ confidence }}</strong></p>
+            </section>
+            {% endif %}
+        </main>
+    </div>
+</body>
+</html>
