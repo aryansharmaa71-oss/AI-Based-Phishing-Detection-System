@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 import tldextract
 from sklearn.model_selection import train_test_split
@@ -109,6 +108,6 @@ if __name__ == "__main__":
         prediction = model.predict(features_df)[0]
         probability = model.predict_proba(features_df)[0][1]
         
-        status = "🚨 PHISHING" if prediction == 1 else "✅ LEGITIMATE"
+        status = "PHISHING" if prediction == 1 else "LEGITIMATE"
         print(f"URL: {test_url}")
         print(f"Result: {status} (Phishing Risk: {probability*100:.1f}%)\n")

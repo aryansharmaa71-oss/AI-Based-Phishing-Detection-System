@@ -3,115 +3,655 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Phishing Detection System</title>
+    <meta name="theme-color" content="#080b18">
+    <meta name="description" content="PHISH-DET checks URLs for phishing signals before you click.">
+    <title>PHISH-DET — Pause before you click</title>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f7f6;
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+        :root {
+            color-scheme: dark;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: #f3f4ff;
+            background: #080b18;
+            font-synthesis: none;
+            text-rendering: optimizeLegibility;
+            --muted: #9da3bd;
+            --line: rgba(192, 198, 255, 0.13);
+            --violet: #9d8aff;
+            --cyan: #70e4dc;
         }
-        .container {
-            background-color: #ffffff;
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+
+        * { box-sizing: border-box; }
+
+        body {
+            position: relative;
+            isolation: isolate;
+            min-width: 320px;
+            min-height: 100vh;
+            margin: 0;
+            overflow-x: hidden;
+            background:
+                radial-gradient(ellipse at 71% 21%, rgba(86, 62, 186, 0.2), transparent 34rem),
+                radial-gradient(ellipse at 17% 83%, rgba(31, 129, 153, 0.13), transparent 32rem),
+                #080b18;
+        }
+
+        body::before,
+        body::after {
+            position: fixed;
+            z-index: -1;
+            pointer-events: none;
+            content: "";
+        }
+
+        body::before {
+            inset: 0;
+            opacity: 0.35;
+            background-image:
+                linear-gradient(rgba(159, 170, 235, 0.045) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(159, 170, 235, 0.045) 1px, transparent 1px);
+            background-size: 58px 58px;
+            mask-image: linear-gradient(to bottom, black, transparent 88%);
+        }
+
+        body::after {
+            top: -19rem;
+            right: -7rem;
+            width: 42rem;
+            height: 42rem;
+            border: 1px solid rgba(147, 132, 255, 0.1);
+            border-radius: 50%;
+            box-shadow:
+                0 0 0 5rem rgba(147, 132, 255, 0.018),
+                0 0 0 10rem rgba(147, 132, 255, 0.014),
+                0 0 110px rgba(111, 84, 226, 0.16);
+            animation: drift 18s ease-in-out infinite alternate;
+        }
+
+        button, input { font: inherit; }
+
+        .shell {
+            width: min(1200px, calc(100% - 56px));
+            margin: 0 auto;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 48px;
+            min-height: 88px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            color: #f5f4ff;
+            font-size: 15px;
+            font-weight: 750;
+            letter-spacing: 0.17em;
+            text-decoration: none;
+        }
+
+        .brand-mark {
+            display: grid;
+            width: 34px;
+            height: 34px;
+            place-items: center;
+            border: 1px solid rgba(157, 138, 255, 0.5);
+            border-radius: 11px;
+            color: var(--violet);
+            background: rgba(132, 111, 255, 0.11);
+            box-shadow: 0 0 24px rgba(128, 104, 255, 0.14);
+        }
+
+        .site-nav {
+            display: flex;
+            align-items: center;
+            gap: 28px;
+            margin-left: auto;
+        }
+
+        .site-nav a {
+            color: #b7bdd3;
+            font-size: 13px;
+            text-decoration: none;
+            transition: color 160ms ease;
+        }
+
+        .site-nav a:hover,
+        .site-nav a:focus-visible { color: #c3b6ff; }
+
+        .top-note {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            color: #b7bdd3;
+            font-size: 12px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .top-note::before {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--cyan);
+            box-shadow: 0 0 12px rgba(112, 228, 220, 0.75);
+            content: "";
+        }
+
+        main {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(390px, 0.9fr);
+            align-items: center;
+            gap: clamp(44px, 8vw, 108px);
+            min-height: calc(100vh - 144px);
+            padding: 72px 0 84px;
+        }
+
+        .how-section {
+            padding: 76px 0 96px;
+            border-top: 1px solid var(--line);
+        }
+
+        .section-heading {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 32px;
+        }
+
+        .section-heading .eyebrow { margin-bottom: 17px; }
+
+        .section-heading h2 {
+            max-width: 550px;
+            margin: 0;
+            font-size: clamp(30px, 4vw, 46px);
+            font-weight: 550;
+            letter-spacing: -0.05em;
+            line-height: 1.12;
+        }
+
+        .section-heading > p {
+            max-width: 360px;
+            margin: 0 0 3px;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.7;
+        }
+
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 18px;
+            margin-top: 38px;
+        }
+
+        .step-card {
+            min-height: 190px;
+            padding: 24px;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: linear-gradient(145deg, rgba(24, 27, 49, 0.66), rgba(13, 17, 34, 0.58));
+        }
+
+        .step-number {
+            display: inline-grid;
+            width: 34px;
+            height: 34px;
+            place-items: center;
+            border: 1px solid rgba(157, 138, 255, 0.3);
+            border-radius: 11px;
+            color: #b3a5ff;
+            background: rgba(157, 138, 255, 0.1);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .step-card h3 {
+            margin: 23px 0 8px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .step-card p {
+            max-width: 320px;
+            margin: 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .intro { max-width: 540px; }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0 0 25px;
+            color: #b4a8ff;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+        }
+
+        .eyebrow::before {
+            width: 22px;
+            height: 1px;
+            background: var(--violet);
+            content: "";
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(44px, 6.2vw, 76px);
+            font-weight: 600;
+            letter-spacing: -0.065em;
+            line-height: 1.03;
+        }
+
+        h1 span {
+            display: block;
+            color: transparent;
+            background: linear-gradient(100deg, #a999ff 8%, #78dce4 92%);
+            background-clip: text;
+            -webkit-background-clip: text;
+        }
+
+        .intro-copy {
+            max-width: 430px;
+            margin: 24px 0 0;
+            color: var(--muted);
+            font-size: 16px;
+            line-height: 1.75;
+        }
+
+        .signal-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 34px 0 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .signal-list li {
+            padding: 9px 12px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            color: #c4c9dc;
+            background: rgba(255, 255, 255, 0.025);
+            font-size: 11px;
+            letter-spacing: 0.03em;
+        }
+
+        .analyzer {
+            position: relative;
+            padding: 32px;
+            overflow: hidden;
+            border: 1px solid rgba(194, 187, 255, 0.19);
+            border-radius: 24px;
+            background: linear-gradient(145deg, rgba(24, 27, 49, 0.93), rgba(13, 17, 34, 0.91));
+            box-shadow: 0 28px 90px rgba(0, 0, 0, 0.34), inset 0 1px rgba(255, 255, 255, 0.055);
+            backdrop-filter: blur(20px);
+        }
+
+        .analyzer::before {
+            position: absolute;
+            top: -110px;
+            right: -80px;
+            width: 220px;
+            height: 220px;
+            border-radius: 50%;
+            background: rgba(111, 87, 220, 0.18);
+            filter: blur(60px);
+            content: "";
+            pointer-events: none;
+        }
+
+        .card-heading {
+            position: relative;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 30px;
+        }
+
+        .card-heading h2 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.025em;
+        }
+
+        .card-heading p {
+            margin: 8px 0 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .card-icon {
+            display: grid;
+            flex: 0 0 42px;
+            width: 42px;
+            height: 42px;
+            place-items: center;
+            border: 1px solid rgba(157, 138, 255, 0.25);
+            border-radius: 14px;
+            color: #b3a5ff;
+            background: rgba(157, 138, 255, 0.1);
+        }
+
+        label {
+            display: block;
+            margin-bottom: 10px;
+            color: #d7d9e8;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .input-wrap { position: relative; }
+
+        input {
             width: 100%;
-            max-width: 500px;
+            height: 56px;
+            padding: 0 16px;
+            border: 1px solid rgba(180, 185, 218, 0.19);
+            border-radius: 12px;
+            outline: none;
+            color: #f3f4ff;
+            background: rgba(6, 9, 21, 0.7);
+            font-size: 14px;
+            transition: border-color 160ms ease, box-shadow 160ms ease;
+        }
+
+        input::placeholder { color: #69708a; }
+
+        input:focus {
+            border-color: rgba(157, 138, 255, 0.78);
+            box-shadow: 0 0 0 4px rgba(157, 138, 255, 0.1);
+        }
+
+        .analyze-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            min-height: 54px;
+            margin-top: 15px;
+            border: 0;
+            border-radius: 12px;
+            color: #111023;
+            background: linear-gradient(100deg, #b3a4ff, #7be2df);
+            box-shadow: 0 8px 28px rgba(117, 129, 255, 0.18);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 750;
+            transition: transform 160ms ease, filter 160ms ease, opacity 160ms ease;
+        }
+
+        .analyze-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            filter: brightness(1.08);
+        }
+
+        .analyze-button:focus-visible {
+            outline: 3px solid rgba(123, 226, 223, 0.65);
+            outline-offset: 3px;
+        }
+
+        .analyze-button:disabled { cursor: wait; opacity: 0.72; }
+
+        .button-arrow { font-size: 18px; line-height: 1; }
+
+        .privacy-note {
+            margin: 16px 0 0;
+            color: #858ca7;
+            font-size: 11px;
+            line-height: 1.6;
             text-align: center;
         }
-        h2 { color: #333; margin-bottom: 24px; }
-        input[type="text"] {
-            width: 100%;
-            padding: 12px 20px;
-            margin: 8px 0;
-            box-sizing: border-box;
-            border: 2px solid #ccc;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: 0.3s;
-        }
-        input[type="text"]:focus { border-color: #4CAF50; outline: none; }
-        button {
-            width: 100%;
-            background-color: #4CAF50;
-            color: white;
-            padding: 14px 20px;
-            margin: 15px 0;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-        }
-        button:hover { background-color: #45a049; }
+
         .result-box {
-            margin-top: 25px;
-            padding: 15px;
-            border-radius: 8px;
-            display: none;
-            font-weight: bold;
+            margin-top: 20px;
+            padding: 15px 16px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            color: #dce0f2;
+            background: rgba(255, 255, 255, 0.035);
+            font-size: 13px;
+            line-height: 1.6;
+            white-space: pre-line;
         }
-        .safe { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .phishing { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .loading { color: #666; font-style: italic; }
+
+        .result-box[hidden] { display: none; }
+        .result-box.safe { border-color: rgba(112, 228, 220, 0.35); color: #a4eee4; background: rgba(37, 143, 133, 0.1); }
+        .result-box.phishing, .result-box.error { border-color: rgba(255, 125, 150, 0.35); color: #ffabb8; background: rgba(166, 49, 83, 0.12); }
+        .result-box.loading { color: #c5baff; }
+
+        footer {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 21px 0 27px;
+            border-top: 1px solid var(--line);
+            color: #747b96;
+            font-size: 11px;
+        }
+
+        @keyframes drift {
+            from { transform: translate3d(0, 0, 0); }
+            to { transform: translate3d(-28px, 25px, 0); }
+        }
+
+        @media (max-width: 800px) {
+            .topbar { gap: 24px; }
+            .site-nav { gap: 18px; }
+
+            main {
+                grid-template-columns: 1fr;
+                gap: 42px;
+                min-height: auto;
+                padding: 66px 0;
+            }
+
+            .intro { max-width: 620px; }
+            .intro-copy { max-width: 520px; }
+            .analyzer { width: min(100%, 560px); }
+            .section-heading { align-items: flex-start; flex-direction: column; gap: 14px; }
+            .steps { grid-template-columns: 1fr; }
+            .step-card { min-height: auto; }
+        }
+
+        @media (max-width: 520px) {
+            .shell { width: min(100% - 32px, 440px); }
+            .topbar { min-height: 72px; }
+            .site-nav { gap: 13px; }
+            .site-nav a { font-size: 11px; }
+            .top-note { display: none; }
+            main { gap: 36px; padding: 52px 0; }
+            h1 { font-size: clamp(43px, 13vw, 62px); }
+            .intro-copy { font-size: 14px; }
+            .analyzer { padding: 24px 20px; border-radius: 20px; }
+            .how-section { padding: 54px 0 68px; }
+            .step-card { padding: 21px; }
+            footer { flex-direction: column; gap: 7px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                scroll-behavior: auto !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
     </style>
 </head>
 <body>
+    <div class="shell">
+        <header class="topbar" id="top">
+            <a class="brand" href="#top" aria-label="PHISH-DET home">
+                <span class="brand-mark" aria-hidden="true">
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 3 19 6v5c0 4.7-2.9 8.1-7 10-4.1-1.9-7-5.3-7-10V6l7-3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+                        <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </span>
+                PHISH-DET
+            </a>
+            <nav class="site-nav" aria-label="Primary navigation">
+                <a href="#how-it-works">How it works</a>
+                <a href="#analyzer">Check a URL</a>
+            </nav>
+            <span class="top-note">Link intelligence</span>
+        </header>
 
-<div class="container">
-    <h2>AI Phishing Detector</h2>
-    <p style="color: #666;">Enter a URL below to check if it's safe or a phishing trap.</p>
-    
-    <input type="text" id="urlInput" placeholder="https://example.com/login" required>
-    <button onclick="analyzeURL()">Analyze URL</button>
+        <main>
+            <section class="intro" aria-labelledby="page-title">
+                <p class="eyebrow">A clearer way to browse</p>
+                <h1 id="page-title">Pause before <span>you click.</span></h1>
+                <p class="intro-copy">
+                    Check a suspicious link for phishing signals in seconds.
+                    A little caution can make a big difference.
+                </p>
+                <ul class="signal-list" aria-label="What the scan checks">
+                    <li>URL structure</li>
+                    <li>Domain signals</li>
+                    <li>Risk estimate</li>
+                </ul>
+            </section>
 
-    <div id="result" class="result-box"></div>
-</div>
+            <section class="analyzer" id="analyzer" aria-labelledby="analyzer-title">
+                <div class="card-heading">
+                    <div>
+                        <h2 id="analyzer-title">Inspect a link</h2>
+                        <p>Paste the full URL you want to check.</p>
+                    </div>
+                    <span class="card-icon" aria-hidden="true">
+                        <svg width="21" height="21" viewBox="0 0 24 24" fill="none">
+                            <path d="M10 13a5 5 0 0 0 7.1 0l2-2A5 5 0 0 0 12 3.9l-1.1 1.1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                            <path d="M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                        </svg>
+                    </span>
+                </div>
 
-<script>
-    async function analyzeURL() {
-        const urlInput = document.getElementById('urlInput').value.trim();
-        const resultDiv = document.getElementById('result');
-        
-        if (!urlInput) {
-            alert("Please enter a valid URL.");
-            return;
+                <form id="urlForm">
+                    <label for="urlInput">Website URL</label>
+                    <div class="input-wrap">
+                        <input
+                            id="urlInput"
+                            name="url"
+                            type="url"
+                            placeholder="https://example.com/login"
+                            autocomplete="url"
+                            inputmode="url"
+                            required
+                        >
+                    </div>
+                    <button class="analyze-button" id="analyzeButton" type="submit">
+                        <span id="buttonLabel">Analyze URL</span>
+                        <span class="button-arrow" aria-hidden="true">↗</span>
+                    </button>
+                </form>
+
+                <div class="result-box" id="result" role="status" aria-live="polite" hidden></div>
+                <p class="privacy-note">Analysis is based on URL patterns. Always verify a site's address before sharing sensitive information.</p>
+            </section>
+        </main>
+
+        <section class="how-section" id="how-it-works" aria-labelledby="how-title">
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">A simple three-step check</p>
+                    <h2 id="how-title">A moment to check. More confidence to click.</h2>
+                </div>
+                <p>PHISH-DET looks at URL patterns and returns a risk estimate. Use it as a helpful signal, not a guarantee that a site is safe.</p>
+            </div>
+            <div class="steps">
+                <article class="step-card">
+                    <span class="step-number">01</span>
+                    <h3>Paste the link</h3>
+                    <p>Enter the complete web address you want to inspect. You do not need to open the link first.</p>
+                </article>
+                <article class="step-card">
+                    <span class="step-number">02</span>
+                    <h3>Review URL signals</h3>
+                    <p>The checker looks at URL structure, domain details, and other lexical patterns.</p>
+                </article>
+                <article class="step-card">
+                    <span class="step-number">03</span>
+                    <h3>Use the risk estimate</h3>
+                    <p>See whether the model flags phishing signals, then verify the address and sender before sharing information.</p>
+                </article>
+            </div>
+        </section>
+
+        <footer>
+            <span>PHISH-DET · Stay curious. Click carefully.</span>
+            <span>For awareness and educational use</span>
+        </footer>
+    </div>
+
+    <script>
+        const urlForm = document.getElementById("urlForm");
+        const urlInput = document.getElementById("urlInput");
+        const analyzeButton = document.getElementById("analyzeButton");
+        const buttonLabel = document.getElementById("buttonLabel");
+        const result = document.getElementById("result");
+
+        function showResult(state, message) {
+            result.className = `result-box ${state}`;
+            result.textContent = message;
+            result.hidden = false;
         }
 
-        // Show loading status
-        resultDiv.style.display = 'block';
-        resultDiv.className = 'result-box loading';
-        resultDiv.innerText = "Analyzing URL patterns with AI...";
+        urlForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            if (!urlForm.reportValidity()) return;
 
-        try {
-            const response = await fetch('http://127.0.0.1:8000/predict', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: urlInput })
-            });
+            analyzeButton.disabled = true;
+            buttonLabel.textContent = "Analyzing...";
+            showResult("loading", "Checking URL patterns...");
 
-            if (!response.ok) throw new Error("API Server error");
+            try {
+                const response = await fetch("http://127.0.0.1:8000/predict", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url: urlInput.value.trim() })
+                });
+                const data = await response.json();
 
-            const data = await response.json();
+                if (!response.ok) {
+                    const message = typeof data.detail === "string" ? data.detail : "The analysis service returned an error.";
+                    throw new Error(message);
+                }
 
-            // Render result based on backend response
-            if (data.is_phishing) {
-                resultDiv.className = 'result-box phishing';
-                resultDiv.innerHTML = `🚨 SUSPECTED PHISHING!<br><span style="font-size:14px; font-weight:normal;">Phishing Risk Score: ${data.confidence_score}%</span>`;
-            } else {
-                resultDiv.className = 'result-box safe';
-                resultDiv.innerHTML = `✅ URL APPEARS SAFE<br><span style="font-size:14px; font-weight:normal;">Phishing Risk Score: ${data.confidence_score}%</span>`;
+                const score = Number(data.confidence_score);
+                if (typeof data.is_phishing !== "boolean" || !Number.isFinite(score)) {
+                    throw new Error("The analysis service returned an unexpected response.");
+                }
+
+                const message = data.is_phishing
+                    ? `Potential phishing detected.\nPhishing risk score: ${score}%`
+                    : `No strong phishing signals detected.\nPhishing risk score: ${score}%`;
+                showResult(data.is_phishing ? "phishing" : "safe", message);
+            } catch (error) {
+                const message = error instanceof TypeError
+                    ? "Could not connect to the analysis service. Make sure the backend is running."
+                    : error.message;
+                showResult("error", message);
+            } finally {
+                analyzeButton.disabled = false;
+                buttonLabel.textContent = "Analyze URL";
             }
-        } catch (error) {
-            resultDiv.className = 'result-box phishing';
-            resultDiv.innerText = "Error: Could not connect to the backend server.";
-        }
-    }
-</script>
-
+        });
+    </script>
 </body>
 </html>
